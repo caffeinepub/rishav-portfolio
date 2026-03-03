@@ -463,12 +463,12 @@ function VideoForm({
     thumbnailUrl: initial?.thumbnailUrl ?? "",
     platform: initial?.platform ?? VideoPlatform.youtube,
     category: initial?.category ?? categories[0]?.slug ?? "",
-    views: initial?.views ?? BigInt(0),
-    duration: initial?.duration ?? BigInt(0),
+    views: initial?.views ?? (0 as unknown as bigint),
+    duration: initial?.duration ?? (0 as unknown as bigint),
     featured: initial?.featured ?? false,
     videoType,
-    order: initial?.order ?? BigInt(0),
-    uploadDate: initial?.uploadDate ?? BigInt(Date.now() * 1_000_000),
+    order: initial?.order ?? (0 as unknown as bigint),
+    uploadDate: initial?.uploadDate ?? (Date.now() as unknown as bigint),
   });
 
   const set = (k: keyof VideoEntry, v: unknown) =>
@@ -495,12 +495,20 @@ function VideoForm({
         onChange={(v) => set("title", v)}
         placeholder="Video title"
       />
-      <AdminInput
-        label="Video URL (YouTube / upload URL)"
-        value={form.videoUrl}
-        onChange={handleVideoUrlChange}
-        placeholder="https://www.youtube.com/watch?v=..."
-      />
+      <div className="flex flex-col gap-1.5">
+        <AdminInput
+          label="Video URL (YouTube / upload URL)"
+          value={form.videoUrl}
+          onChange={handleVideoUrlChange}
+          placeholder="https://www.youtube.com/watch?v=..."
+        />
+        {form.platform === VideoPlatform.upload && (
+          <p style={{ color: "oklch(0.55 0.2 25)", fontSize: "0.75rem" }}>
+            Paste a direct .mp4 or .webm URL. The video will play inside the
+            website modal.
+          </p>
+        )}
+      </div>
       {/* Thumbnail preview */}
       {form.thumbnailUrl && (
         <div className="flex items-center gap-3">
@@ -555,7 +563,9 @@ function VideoForm({
       <AdminInput
         label="Views"
         value={String(Number(form.views))}
-        onChange={(v) => set("views", BigInt(Number.parseInt(v) || 0))}
+        onChange={(v) =>
+          set("views", (Number.parseInt(v) || 0) as unknown as bigint)
+        }
         type="number"
         placeholder="0"
       />
@@ -1179,7 +1189,8 @@ function ServicesManager() {
                       title: form.title,
                       description: form.description,
                       icon: form.icon,
-                      order: BigInt(Number.parseInt(form.order) || 0),
+                      order: (Number.parseInt(form.order) ||
+                        0) as unknown as bigint,
                       pricing: form.pricing,
                       visible: form.visible,
                     },
@@ -1308,7 +1319,8 @@ function ServicesManager() {
                               title: form.title,
                               description: form.description,
                               icon: form.icon,
-                              order: BigInt(Number.parseInt(form.order) || 0),
+                              order: (Number.parseInt(form.order) ||
+                                0) as unknown as bigint,
                               pricing: form.pricing,
                               visible: form.visible,
                             },
@@ -1788,7 +1800,7 @@ function MediaLibrary() {
             id: crypto.randomUUID(),
             blob: ExternalBlob.fromURL(url),
             name: file.name,
-            uploadedAt: BigInt(Date.now() * 1_000_000),
+            uploadedAt: Date.now() as unknown as bigint,
           },
           {
             onSuccess: () => toast.success("File added to media library!"),
@@ -2160,8 +2172,8 @@ function TestimonialsManager() {
               clientName: form.clientName,
               clientImageUrl: form.clientImageUrl,
               review: form.review,
-              rating: BigInt(form.rating),
-              order: BigInt(Number.parseInt(form.order) || 0),
+              rating: form.rating as unknown as bigint,
+              order: (Number.parseInt(form.order) || 0) as unknown as bigint,
             })
           }
           disabled={isPending || !form.clientName || !form.review}

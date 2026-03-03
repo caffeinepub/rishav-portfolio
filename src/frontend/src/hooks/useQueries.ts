@@ -19,13 +19,7 @@ function lsGet<T>(key: string): T | null {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
-    return JSON.parse(raw, (_k, v) => {
-      // Revive BigInt values serialized as {"__bigint__":"123"}
-      if (v && typeof v === "object" && "__bigint__" in v) {
-        return BigInt(v.__bigint__);
-      }
-      return v;
-    }) as T;
+    return JSON.parse(raw) as T;
   } catch {
     return null;
   }
@@ -33,16 +27,15 @@ function lsGet<T>(key: string): T | null {
 
 function lsSet<T>(key: string, value: T) {
   try {
-    localStorage.setItem(
-      key,
-      JSON.stringify(value, (_k, v) => {
-        if (typeof v === "bigint") return { __bigint__: v.toString() };
-        return v;
-      }),
-    );
+    localStorage.setItem(key, JSON.stringify(value));
   } catch {
     // quota exceeded or private browsing — ignore
   }
+}
+
+// Helper: store plain numbers in localStorage but satisfy TypeScript's bigint types
+function n(v: number): bigint {
+  return v as unknown as bigint;
 }
 
 // ─── Seed data ────────────────────────────────────────────────────────────────
@@ -60,85 +53,85 @@ const SEED_VIDEOS: VideoEntry[] = [
     id: "vid-1",
     title: "Cinematic Travel Reel — Bali Golden Hour",
     featured: false,
-    duration: BigInt(60),
+    duration: n(60),
     thumbnailUrl: "",
-    order: BigInt(1),
-    views: BigInt(124000),
+    order: n(1),
+    views: n(124000),
     platform: VideoPlatform.youtube,
     videoType: VideoType.short_,
     category: "reels",
     videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    uploadDate: BigInt(Date.now() * 1_000_000),
+    uploadDate: n(Date.now()),
   },
   {
     id: "vid-2",
     title: "Gaming Highlights Montage — Epic Clutch Moments",
     featured: false,
-    duration: BigInt(58),
+    duration: n(58),
     thumbnailUrl: "",
-    order: BigInt(2),
-    views: BigInt(87500),
+    order: n(2),
+    views: n(87500),
     platform: VideoPlatform.youtube,
     videoType: VideoType.short_,
     category: "gaming",
     videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    uploadDate: BigInt((Date.now() - 86400000 * 2) * 1_000_000),
+    uploadDate: n(Date.now() - 86400000 * 2),
   },
   {
     id: "vid-3",
     title: "Brand Ad — Luxury Perfume Product Film",
     featured: false,
-    duration: BigInt(30),
+    duration: n(30),
     thumbnailUrl: "",
-    order: BigInt(3),
-    views: BigInt(212000),
+    order: n(3),
+    views: n(212000),
     platform: VideoPlatform.youtube,
     videoType: VideoType.short_,
     category: "ads",
     videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    uploadDate: BigInt((Date.now() - 86400000 * 5) * 1_000_000),
+    uploadDate: n(Date.now() - 86400000 * 5),
   },
   {
     id: "vid-4",
     title: "Full Documentary — Street Photography in Tokyo",
     featured: true,
-    duration: BigInt(1800),
+    duration: n(1800),
     thumbnailUrl: "",
-    order: BigInt(4),
-    views: BigInt(345000),
+    order: n(4),
+    views: n(345000),
     platform: VideoPlatform.youtube,
     videoType: VideoType.long_,
     category: "cinematic",
     videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    uploadDate: BigInt((Date.now() - 86400000 * 10) * 1_000_000),
+    uploadDate: n(Date.now() - 86400000 * 10),
   },
   {
     id: "vid-5",
     title: "YouTube Channel Trailer — Creator Studio 2024",
     featured: false,
-    duration: BigInt(720),
+    duration: n(720),
     thumbnailUrl: "",
-    order: BigInt(5),
-    views: BigInt(67800),
+    order: n(5),
+    views: n(67800),
     platform: VideoPlatform.youtube,
     videoType: VideoType.long_,
     category: "youtube-shorts",
     videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    uploadDate: BigInt((Date.now() - 86400000 * 15) * 1_000_000),
+    uploadDate: n(Date.now() - 86400000 * 15),
   },
   {
     id: "vid-6",
     title: "Cinematic Short Film — The Last Frame",
     featured: false,
-    duration: BigInt(960),
+    duration: n(960),
     thumbnailUrl: "",
-    order: BigInt(6),
-    views: BigInt(189000),
+    order: n(6),
+    views: n(189000),
     platform: VideoPlatform.youtube,
     videoType: VideoType.long_,
     category: "cinematic",
     videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    uploadDate: BigInt((Date.now() - 86400000 * 20) * 1_000_000),
+    uploadDate: n(Date.now() - 86400000 * 20),
   },
 ];
 
@@ -146,7 +139,7 @@ const SEED_SERVICES: Service[] = [
   {
     id: "svc-1",
     title: "Video Editing",
-    order: BigInt(1),
+    order: n(1),
     icon: "🎬",
     description:
       "Professional cut, color grade, and audio mix for any content type. Fast turnaround, cinematic quality.",
@@ -156,7 +149,7 @@ const SEED_SERVICES: Service[] = [
   {
     id: "svc-2",
     title: "Color Grading",
-    order: BigInt(2),
+    order: n(2),
     icon: "🎨",
     description:
       "Hollywood-grade color correction and creative grading. Your footage, elevated to cinematic standards.",
@@ -166,7 +159,7 @@ const SEED_SERVICES: Service[] = [
   {
     id: "svc-3",
     title: "Motion Graphics",
-    order: BigInt(3),
+    order: n(3),
     icon: "✨",
     description:
       "Dynamic title cards, animated overlays, and brand motion assets that elevate your visual identity.",
@@ -176,7 +169,7 @@ const SEED_SERVICES: Service[] = [
   {
     id: "svc-4",
     title: "YouTube Content",
-    order: BigInt(4),
+    order: n(4),
     icon: "📺",
     description:
       "End-to-end YouTube video editing optimized for retention — hooks, pacing, thumbnails, chapters.",
@@ -186,7 +179,7 @@ const SEED_SERVICES: Service[] = [
   {
     id: "svc-5",
     title: "Reels & Shorts",
-    order: BigInt(5),
+    order: n(5),
     icon: "🎵",
     description:
       "Punchy short-form vertical content for Instagram Reels, YouTube Shorts, and TikTok. Beat-synced cuts.",
@@ -196,7 +189,7 @@ const SEED_SERVICES: Service[] = [
   {
     id: "svc-6",
     title: "Thumbnail Design",
-    order: BigInt(6),
+    order: n(6),
     icon: "🖼️",
     description:
       "Click-worthy custom thumbnails with brand consistency. A/B tested designs that boost CTR.",

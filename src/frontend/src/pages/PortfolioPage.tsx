@@ -40,15 +40,17 @@ import {
 
 // ─── Helper utils ─────────────────────────────────────────────────────────────
 
-function formatViews(n: bigint): string {
-  const num = Number(n);
+function formatViews(v: number | bigint): string {
+  const num = Number(v);
   if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
   if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
   return String(num);
 }
 
-function formatDate(ts: bigint): string {
-  const ms = Number(ts / BigInt(1_000_000));
+function formatDate(ts: number | bigint): string {
+  // ts may be a plain millisecond timestamp (number) or a nanosecond bigint
+  const ms =
+    typeof ts === "bigint" ? Number(ts / BigInt(1_000_000)) : Number(ts);
   return new Date(ms).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -65,6 +67,27 @@ const GRADIENT_PLACEHOLDERS = [
   "linear-gradient(135deg, oklch(0.25 0.07 350), oklch(0.18 0.1 300))",
   "linear-gradient(135deg, oklch(0.2 0.1 60), oklch(0.15 0.08 20))",
 ];
+
+/** Extract YouTube ID from any YouTube URL format */
+function getYouTubeId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/(?:watch\?v=|shorts\/|live\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
+    /[?&]v=([a-zA-Z0-9_-]{11})/,
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+/** Auto-generate thumbnail URL from YouTube video URL */
+function getAutoThumbnail(videoUrl: string, manualThumb: string): string {
+  if (manualThumb?.trim()) return manualThumb;
+  const ytId = getYouTubeId(videoUrl);
+  if (ytId) return `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
+  return "";
+}
 
 function getThumbnailStyle(url: string, index: number): React.CSSProperties {
   if (url?.trim()) {
@@ -401,6 +424,11 @@ function ShortVideoCard({
   index: number;
   onClick: () => void;
 }) {
+  const thumbUrl = getAutoThumbnail(video.videoUrl, video.thumbnailUrl);
+  const [thumbLoaded, setThumbLoaded] = useState(false);
+  const [thumbError, setThumbError] = useState(false);
+  const resolvedThumb = thumbError ? "" : thumbUrl;
+
   return (
     <motion.div
       data-ocid={`shortform.item.${index + 1}`}
@@ -415,9 +443,22 @@ function ShortVideoCard({
       {/* Thumbnail */}
       <div
         className="relative w-full h-full"
-        style={getThumbnailStyle(video.thumbnailUrl, index)}
+        style={getThumbnailStyle(resolvedThumb, index)}
       >
-        {!video.thumbnailUrl && (
+        {/* Hidden img tag for lazy loading & error detection */}
+        {thumbUrl && (
+          <img
+            src={thumbUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            aria-hidden="true"
+            onLoad={() => setThumbLoaded(true)}
+            onError={() => setThumbError(true)}
+            style={{ display: "none" }}
+          />
+        )}
+        {(!resolvedThumb || !thumbLoaded) && (
           <div className="absolute inset-0 thumb-skeleton" />
         )}
 
@@ -477,6 +518,11 @@ function LongVideoCard({
   index: number;
   onClick: () => void;
 }) {
+  const thumbUrl = getAutoThumbnail(video.videoUrl, video.thumbnailUrl);
+  const [thumbLoaded, setThumbLoaded] = useState(false);
+  const [thumbError, setThumbError] = useState(false);
+  const resolvedThumb = thumbError ? "" : thumbUrl;
+
   return (
     <motion.div
       data-ocid={`longform.item.${index + 1}`}
@@ -492,10 +538,23 @@ function LongVideoCard({
         className="relative w-full"
         style={{
           aspectRatio: "16/9",
-          ...getThumbnailStyle(video.thumbnailUrl, index + 10),
+          ...getThumbnailStyle(resolvedThumb, index + 10),
         }}
       >
-        {!video.thumbnailUrl && (
+        {/* Hidden img for lazy load + error detection */}
+        {thumbUrl && (
+          <img
+            src={thumbUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            aria-hidden="true"
+            onLoad={() => setThumbLoaded(true)}
+            onError={() => setThumbError(true)}
+            style={{ display: "none" }}
+          />
+        )}
+        {(!resolvedThumb || !thumbLoaded) && (
           <div className="absolute inset-0 thumb-skeleton" />
         )}
 
@@ -570,6 +629,102 @@ function LongVideoCard({
   );
 }
 
+// ─── FEATURED CARD ───────────────────────────────────────────────────────────
+
+function FeaturedCard({
+  v,
+  i,
+  activeIdx,
+  onVideoClick,
+  setActiveIdx,
+}: {
+  v: VideoEntry;
+  i: number;
+  activeIdx: number;
+  onVideoClick: (v: VideoEntry) => void;
+  setActiveIdx: (i: number) => void;
+}) {
+  const thumbUrl = getAutoThumbnail(v.videoUrl, v.thumbnailUrl);
+  const [thumbLoaded, setThumbLoaded] = useState(false);
+  const [thumbError, setThumbError] = useState(false);
+  const resolvedThumb = thumbError ? "" : thumbUrl;
+
+  return (
+    <motion.div
+      data-ocid={`featured.item.${i + 1}`}
+      className="flex-shrink-0 scroll-snap-item cursor-pointer"
+      style={{ width: "clamp(280px, 35vw, 400px)" }}
+      onClick={() => {
+        setActiveIdx(i);
+        onVideoClick(v);
+      }}
+      whileHover={{ scale: 1.02 }}
+      transition={{ duration: 0.2 }}
+    >
+      <div
+        className="relative rounded-2xl overflow-hidden transition-all duration-300"
+        style={{
+          aspectRatio: "16/9",
+          ...getThumbnailStyle(resolvedThumb, i + 20),
+          border:
+            i === activeIdx
+              ? "2px solid var(--neon)"
+              : "2px solid oklch(0.22 0.015 240)",
+          boxShadow: i === activeIdx ? "var(--neon-glow)" : "none",
+        }}
+      >
+        {thumbUrl && (
+          <img
+            src={thumbUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            aria-hidden="true"
+            onLoad={() => setThumbLoaded(true)}
+            onError={() => setThumbError(true)}
+            style={{ display: "none" }}
+          />
+        )}
+        {(!resolvedThumb || !thumbLoaded) && (
+          <div className="thumb-skeleton absolute inset-0" />
+        )}
+        <div className="absolute inset-0 gradient-overlay-bottom" />
+        <div className="absolute bottom-4 left-4 right-4">
+          <p
+            className="text-sm font-bold line-clamp-2"
+            style={{
+              color: "oklch(0.95 0.01 240)",
+              fontFamily: '"Bricolage Grotesque", sans-serif',
+            }}
+          >
+            {v.title}
+          </p>
+          <p
+            className="text-xs mt-1 flex items-center gap-1"
+            style={{ color: "oklch(0.65 0.02 240)" }}
+          >
+            <Eye size={10} />
+            {formatViews(v.views)} views
+          </p>
+        </div>
+        <div
+          className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center"
+          style={{
+            background: "oklch(0.06 0 0 / 0.7)",
+            border: "1px solid oklch(0.82 0.22 193 / 0.4)",
+          }}
+        >
+          <Play
+            size={12}
+            fill="currentColor"
+            style={{ color: "var(--neon)", marginLeft: "2px" }}
+          />
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 // ─── FEATURED SLIDER ──────────────────────────────────────────────────────────
 
 function FeaturedSlider({
@@ -608,67 +763,14 @@ function FeaturedSlider({
 
         <div className="flex gap-4 overflow-x-auto scroll-snap-x pb-4 no-scrollbar">
           {videos.map((v, i) => (
-            <motion.div
+            <FeaturedCard
               key={v.id}
-              data-ocid={`featured.item.${i + 1}`}
-              className="flex-shrink-0 scroll-snap-item cursor-pointer"
-              style={{ width: "clamp(280px, 35vw, 400px)" }}
-              onClick={() => {
-                setActiveIdx(i);
-                onVideoClick(v);
-              }}
-              whileHover={{ scale: 1.02 }}
-              transition={{ duration: 0.2 }}
-            >
-              <div
-                className="relative rounded-2xl overflow-hidden transition-all duration-300"
-                style={{
-                  aspectRatio: "16/9",
-                  ...getThumbnailStyle(v.thumbnailUrl, i + 20),
-                  border:
-                    i === activeIdx
-                      ? "2px solid var(--neon)"
-                      : "2px solid oklch(0.22 0.015 240)",
-                  boxShadow: i === activeIdx ? "var(--neon-glow)" : "none",
-                }}
-              >
-                {!v.thumbnailUrl && (
-                  <div className="thumb-skeleton absolute inset-0" />
-                )}
-                <div className="absolute inset-0 gradient-overlay-bottom" />
-                <div className="absolute bottom-4 left-4 right-4">
-                  <p
-                    className="text-sm font-bold line-clamp-2"
-                    style={{
-                      color: "oklch(0.95 0.01 240)",
-                      fontFamily: '"Bricolage Grotesque", sans-serif',
-                    }}
-                  >
-                    {v.title}
-                  </p>
-                  <p
-                    className="text-xs mt-1 flex items-center gap-1"
-                    style={{ color: "oklch(0.65 0.02 240)" }}
-                  >
-                    <Eye size={10} />
-                    {formatViews(v.views)} views
-                  </p>
-                </div>
-                <div
-                  className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center"
-                  style={{
-                    background: "oklch(0.06 0 0 / 0.7)",
-                    border: "1px solid oklch(0.82 0.22 193 / 0.4)",
-                  }}
-                >
-                  <Play
-                    size={12}
-                    fill="currentColor"
-                    style={{ color: "var(--neon)", marginLeft: "2px" }}
-                  />
-                </div>
-              </div>
-            </motion.div>
+              v={v}
+              i={i}
+              activeIdx={activeIdx}
+              onVideoClick={onVideoClick}
+              setActiveIdx={setActiveIdx}
+            />
           ))}
         </div>
       </div>
