@@ -413,6 +413,34 @@ function HeroSection() {
 
 // ─── VIDEO FORM ───────────────────────────────────────────────────────────────
 
+// Extract YouTube video ID from any YouTube URL (watch, shorts, youtu.be)
+function extractYouTubeId(url: string): string | null {
+  if (!url) return null;
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    /[?&]v=([a-zA-Z0-9_-]{11})/,
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+function getYouTubeThumbnail(url: string): string {
+  const id = extractYouTubeId(url);
+  if (!id) return "";
+  return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+}
+
+function detectPlatform(url: string): VideoPlatform {
+  if (!url) return VideoPlatform.youtube;
+  if (url.includes("instagram.com")) return VideoPlatform.instagram;
+  if (url.includes("youtube.com") || url.includes("youtu.be"))
+    return VideoPlatform.youtube;
+  return VideoPlatform.upload;
+}
+
 function VideoForm({
   initial,
   videoType,
@@ -446,6 +474,19 @@ function VideoForm({
   const set = (k: keyof VideoEntry, v: unknown) =>
     setForm((p) => ({ ...p, [k]: v }));
 
+  // When video URL changes: auto-detect platform and auto-generate thumbnail
+  const handleVideoUrlChange = (url: string) => {
+    const platform = detectPlatform(url);
+    const thumbnail = getYouTubeThumbnail(url);
+    setForm((p) => ({
+      ...p,
+      videoUrl: url,
+      platform,
+      // Only auto-set thumbnail if it's empty or was previously auto-generated
+      thumbnailUrl: thumbnail || p.thumbnailUrl,
+    }));
+  };
+
   return (
     <div className="grid gap-4">
       <AdminInput
@@ -457,14 +498,40 @@ function VideoForm({
       <AdminInput
         label="Video URL (YouTube / upload URL)"
         value={form.videoUrl}
-        onChange={(v) => set("videoUrl", v)}
+        onChange={handleVideoUrlChange}
         placeholder="https://www.youtube.com/watch?v=..."
       />
+      {/* Thumbnail preview */}
+      {form.thumbnailUrl && (
+        <div className="flex items-center gap-3">
+          <img
+            src={form.thumbnailUrl}
+            alt="Thumbnail preview"
+            className="w-24 h-14 rounded-lg object-cover"
+            style={{ border: "1px solid oklch(0.2 0.012 240)" }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => set("thumbnailUrl", "")}
+            className="text-xs px-2 py-1 rounded"
+            style={{
+              background: "oklch(0.7 0.22 25 / 0.1)",
+              border: "1px solid oklch(0.7 0.22 25 / 0.3)",
+              color: "oklch(0.7 0.18 25)",
+            }}
+          >
+            Remove
+          </button>
+        </div>
+      )}
       <AdminInput
-        label="Thumbnail URL"
+        label="Thumbnail URL (auto-filled from YouTube)"
         value={form.thumbnailUrl}
         onChange={(v) => set("thumbnailUrl", v)}
-        placeholder="https://..."
+        placeholder="Auto-generated from YouTube URL, or paste custom"
       />
       <AdminSelect
         label="Platform"

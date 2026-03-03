@@ -27,7 +27,8 @@ function formatDate(ts: bigint): string {
 
 function getYouTubeId(url: string): string | null {
   const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&?/\s]+)/,
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([^&?/\s]+)/,
+    /[?&]v=([a-zA-Z0-9_-]{11})/,
   ];
   for (const p of patterns) {
     const m = url.match(p);

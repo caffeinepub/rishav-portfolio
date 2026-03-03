@@ -13,6 +13,38 @@ import type {
 import { GlowIntensity, VideoPlatform, VideoType } from "../backend";
 import { useActor } from "./useActor";
 
+// ─── localStorage helpers ─────────────────────────────────────────────────────
+
+function lsGet<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    return JSON.parse(raw, (_k, v) => {
+      // Revive BigInt values serialized as {"__bigint__":"123"}
+      if (v && typeof v === "object" && "__bigint__" in v) {
+        return BigInt(v.__bigint__);
+      }
+      return v;
+    }) as T;
+  } catch {
+    return null;
+  }
+}
+
+function lsSet<T>(key: string, value: T) {
+  try {
+    localStorage.setItem(
+      key,
+      JSON.stringify(value, (_k, v) => {
+        if (typeof v === "bigint") return { __bigint__: v.toString() };
+        return v;
+      }),
+    );
+  } catch {
+    // quota exceeded or private browsing — ignore
+  }
+}
+
 // ─── Seed data ────────────────────────────────────────────────────────────────
 
 const SEED_CATEGORIES: Category[] = [
@@ -213,6 +245,19 @@ const SEED_SECTION_CONFIG: SectionConfig = {
 
 const SEED_TESTIMONIALS: Testimonial[] = [];
 
+// ─── localStorage keys ────────────────────────────────────────────────────────
+
+const LS = {
+  videos: "rishav_videos",
+  categories: "rishav_categories",
+  services: "rishav_services",
+  siteContent: "rishav_site_content",
+  themeSettings: "rishav_theme_settings",
+  mediaFiles: "rishav_media_files",
+  testimonials: "rishav_testimonials",
+  sectionConfig: "rishav_section_config",
+};
+
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
 export function useAllVideos() {
@@ -220,16 +265,25 @@ export function useAllVideos() {
   return useQuery<VideoEntry[]>({
     queryKey: ["videos"],
     queryFn: async () => {
-      if (!actor) return SEED_VIDEOS;
+      // localStorage first
+      const ls = lsGet<VideoEntry[]>(LS.videos);
+      if (ls && ls.length > 0) return ls;
+
+      if (!actor) {
+        lsSet(LS.videos, SEED_VIDEOS);
+        return SEED_VIDEOS;
+      }
       try {
         const vids = await actor.getAllVideos();
         if (vids.length === 0) {
-          // Seed data
           await Promise.all(SEED_VIDEOS.map((v) => actor.createVideo(v)));
+          lsSet(LS.videos, SEED_VIDEOS);
           return SEED_VIDEOS;
         }
+        lsSet(LS.videos, vids);
         return vids;
       } catch {
+        lsSet(LS.videos, SEED_VIDEOS);
         return SEED_VIDEOS;
       }
     },
@@ -243,17 +297,26 @@ export function useAllCategories() {
   return useQuery<Category[]>({
     queryKey: ["categories"],
     queryFn: async () => {
-      if (!actor) return SEED_CATEGORIES;
+      const ls = lsGet<Category[]>(LS.categories);
+      if (ls && ls.length > 0) return ls;
+
+      if (!actor) {
+        lsSet(LS.categories, SEED_CATEGORIES);
+        return SEED_CATEGORIES;
+      }
       try {
         const cats = await actor.getAllCategories();
         if (cats.length === 0) {
           await Promise.all(
             SEED_CATEGORIES.map((c) => actor.createCategory(c)),
           );
+          lsSet(LS.categories, SEED_CATEGORIES);
           return SEED_CATEGORIES;
         }
+        lsSet(LS.categories, cats);
         return cats;
       } catch {
+        lsSet(LS.categories, SEED_CATEGORIES);
         return SEED_CATEGORIES;
       }
     },
@@ -267,15 +330,24 @@ export function useAllServices() {
   return useQuery<Service[]>({
     queryKey: ["services"],
     queryFn: async () => {
-      if (!actor) return SEED_SERVICES;
+      const ls = lsGet<Service[]>(LS.services);
+      if (ls && ls.length > 0) return ls;
+
+      if (!actor) {
+        lsSet(LS.services, SEED_SERVICES);
+        return SEED_SERVICES;
+      }
       try {
         const svcs = await actor.getAllServices();
         if (svcs.length === 0) {
           await Promise.all(SEED_SERVICES.map((s) => actor.createService(s)));
+          lsSet(LS.services, SEED_SERVICES);
           return SEED_SERVICES;
         }
+        lsSet(LS.services, svcs);
         return svcs;
       } catch {
+        lsSet(LS.services, SEED_SERVICES);
         return SEED_SERVICES;
       }
     },
@@ -289,11 +361,19 @@ export function useSiteContent() {
   return useQuery<SiteContent>({
     queryKey: ["siteContent"],
     queryFn: async () => {
-      if (!actor) return SEED_SITE_CONTENT;
+      const ls = lsGet<SiteContent>(LS.siteContent);
+      if (ls) return ls;
+
+      if (!actor) {
+        lsSet(LS.siteContent, SEED_SITE_CONTENT);
+        return SEED_SITE_CONTENT;
+      }
       try {
         const content = await actor.getSiteContent();
+        lsSet(LS.siteContent, content);
         return content;
       } catch {
+        lsSet(LS.siteContent, SEED_SITE_CONTENT);
         return SEED_SITE_CONTENT;
       }
     },
@@ -304,31 +384,32 @@ export function useSiteContent() {
 
 export function useThemeSettings() {
   const { actor, isFetching } = useActor();
+  const defaultTheme: ThemeSettings = {
+    accentColor: "#00e5ff",
+    darkMode: true,
+    glowIntensity: GlowIntensity.medium,
+  };
   return useQuery<ThemeSettings>({
     queryKey: ["themeSettings"],
     queryFn: async () => {
-      if (!actor)
-        return {
-          accentColor: "#00e5ff",
-          darkMode: true,
-          glowIntensity: GlowIntensity.medium,
-        };
+      const ls = lsGet<ThemeSettings>(LS.themeSettings);
+      if (ls) return ls;
+
+      if (!actor) {
+        lsSet(LS.themeSettings, defaultTheme);
+        return defaultTheme;
+      }
       try {
-        return await actor.getThemeSettings();
+        const t = await actor.getThemeSettings();
+        lsSet(LS.themeSettings, t);
+        return t;
       } catch {
-        return {
-          accentColor: "#00e5ff",
-          darkMode: true,
-          glowIntensity: GlowIntensity.medium,
-        };
+        lsSet(LS.themeSettings, defaultTheme);
+        return defaultTheme;
       }
     },
     enabled: !isFetching,
-    placeholderData: {
-      accentColor: "#00e5ff",
-      darkMode: true,
-      glowIntensity: GlowIntensity.medium,
-    },
+    placeholderData: defaultTheme,
   });
 }
 
@@ -337,9 +418,14 @@ export function useAllMediaFiles() {
   return useQuery<MediaFile[]>({
     queryKey: ["mediaFiles"],
     queryFn: async () => {
+      const ls = lsGet<MediaFile[]>(LS.mediaFiles);
+      if (ls) return ls;
+
       if (!actor) return [];
       try {
-        return await actor.getAllMediaFiles();
+        const files = await actor.getAllMediaFiles();
+        lsSet(LS.mediaFiles, files);
+        return files;
       } catch {
         return [];
       }
@@ -382,117 +468,154 @@ export function useIsAdmin() {
   });
 }
 
-// ─── Mutations ────────────────────────────────────────────────────────────────
+// ─── Mutations (all use localStorage — no backend auth required) ──────────────
 
 export function useCreateVideo() {
-  const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (video: VideoEntry) => actor!.createVideo(video),
+    mutationFn: async (video: VideoEntry) => {
+      const current = lsGet<VideoEntry[]>(LS.videos) ?? SEED_VIDEOS;
+      const updated = [...current, video];
+      lsSet(LS.videos, updated);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["videos"] }),
   });
 }
 
 export function useUpdateVideo() {
-  const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, video }: { id: string; video: VideoEntry }) =>
-      actor!.updateVideo(id, video),
+    mutationFn: async ({ id, video }: { id: string; video: VideoEntry }) => {
+      const current = lsGet<VideoEntry[]>(LS.videos) ?? [];
+      const updated = current.map((v) => (v.id === id ? video : v));
+      lsSet(LS.videos, updated);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["videos"] }),
   });
 }
 
 export function useDeleteVideo() {
-  const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => actor!.deleteVideo(id),
+    mutationFn: async (id: string) => {
+      const current = lsGet<VideoEntry[]>(LS.videos) ?? [];
+      lsSet(
+        LS.videos,
+        current.filter((v) => v.id !== id),
+      );
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["videos"] }),
   });
 }
 
 export function useCreateCategory() {
-  const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (cat: Category) => actor!.createCategory(cat),
+    mutationFn: async (cat: Category) => {
+      const current = lsGet<Category[]>(LS.categories) ?? SEED_CATEGORIES;
+      lsSet(LS.categories, [...current, cat]);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] }),
   });
 }
 
 export function useUpdateCategory() {
-  const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, cat }: { id: string; cat: Category }) =>
-      actor!.updateCategory(id, cat),
+    mutationFn: async ({ id, cat }: { id: string; cat: Category }) => {
+      const current = lsGet<Category[]>(LS.categories) ?? [];
+      lsSet(
+        LS.categories,
+        current.map((c) => (c.id === id ? cat : c)),
+      );
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] }),
   });
 }
 
 export function useDeleteCategory() {
-  const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => actor!.deleteCategory(id),
+    mutationFn: async (id: string) => {
+      const current = lsGet<Category[]>(LS.categories) ?? [];
+      lsSet(
+        LS.categories,
+        current.filter((c) => c.id !== id),
+      );
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] }),
   });
 }
 
 export function useCreateService() {
-  const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (svc: Service) => actor!.createService(svc),
+    mutationFn: async (svc: Service) => {
+      const current = lsGet<Service[]>(LS.services) ?? SEED_SERVICES;
+      lsSet(LS.services, [...current, svc]);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["services"] }),
   });
 }
 
 export function useUpdateService() {
-  const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, svc }: { id: string; svc: Service }) =>
-      actor!.updateService(id, svc),
+    mutationFn: async ({ id, svc }: { id: string; svc: Service }) => {
+      const current = lsGet<Service[]>(LS.services) ?? [];
+      lsSet(
+        LS.services,
+        current.map((s) => (s.id === id ? svc : s)),
+      );
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["services"] }),
   });
 }
 
 export function useDeleteService() {
-  const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => actor!.deleteService(id),
+    mutationFn: async (id: string) => {
+      const current = lsGet<Service[]>(LS.services) ?? [];
+      lsSet(
+        LS.services,
+        current.filter((s) => s.id !== id),
+      );
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["services"] }),
   });
 }
 
 export function useUpdateSiteContent() {
-  const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ key, value }: { key: string; value: string }) =>
-      actor!.updateSiteContent(key, value),
+    mutationFn: async ({ key, value }: { key: string; value: string }) => {
+      const current: SiteContent =
+        lsGet<SiteContent>(LS.siteContent) ?? SEED_SITE_CONTENT;
+      const updated = { ...current, [key]: value };
+      lsSet(LS.siteContent, updated);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["siteContent"] }),
   });
 }
 
 export function useUpdateThemeSettings() {
-  const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (settings: ThemeSettings) =>
-      actor!.updateThemeSettings(settings),
+    mutationFn: async (settings: ThemeSettings) => {
+      lsSet(LS.themeSettings, settings);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["themeSettings"] }),
   });
 }
 
 export function useAddMediaFile() {
-  const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (media: MediaFile) => actor!.addMediaFile(media),
+    mutationFn: async (media: MediaFile) => {
+      const current = lsGet<MediaFile[]>(LS.mediaFiles) ?? [];
+      lsSet(LS.mediaFiles, [...current, media]);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["mediaFiles"] }),
   });
 }
@@ -509,9 +632,14 @@ export function useAllTestimonials() {
   return useQuery<Testimonial[]>({
     queryKey: ["testimonials"],
     queryFn: async () => {
+      const ls = lsGet<Testimonial[]>(LS.testimonials);
+      if (ls) return ls;
+
       if (!actor) return SEED_TESTIMONIALS;
       try {
-        return await actor.getAllTestimonials();
+        const t = await actor.getAllTestimonials();
+        lsSet(LS.testimonials, t);
+        return t;
       } catch {
         return SEED_TESTIMONIALS;
       }
@@ -522,32 +650,43 @@ export function useAllTestimonials() {
 }
 
 export function useCreateTestimonial() {
-  const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (t: Testimonial) => actor!.createTestimonial(t),
+    mutationFn: async (t: Testimonial) => {
+      const current = lsGet<Testimonial[]>(LS.testimonials) ?? [];
+      lsSet(LS.testimonials, [...current, t]);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["testimonials"] }),
   });
 }
 
 export function useUpdateTestimonial() {
-  const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       id,
       testimonial,
-    }: { id: string; testimonial: Testimonial }) =>
-      actor!.updateTestimonial(id, testimonial),
+    }: { id: string; testimonial: Testimonial }) => {
+      const current = lsGet<Testimonial[]>(LS.testimonials) ?? [];
+      lsSet(
+        LS.testimonials,
+        current.map((t) => (t.id === id ? testimonial : t)),
+      );
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["testimonials"] }),
   });
 }
 
 export function useDeleteTestimonial() {
-  const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => actor!.deleteTestimonial(id),
+    mutationFn: async (id: string) => {
+      const current = lsGet<Testimonial[]>(LS.testimonials) ?? [];
+      lsSet(
+        LS.testimonials,
+        current.filter((t) => t.id !== id),
+      );
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["testimonials"] }),
   });
 }
@@ -557,10 +696,19 @@ export function useSectionConfig() {
   return useQuery<SectionConfig>({
     queryKey: ["sectionConfig"],
     queryFn: async () => {
-      if (!actor) return SEED_SECTION_CONFIG;
+      const ls = lsGet<SectionConfig>(LS.sectionConfig);
+      if (ls) return ls;
+
+      if (!actor) {
+        lsSet(LS.sectionConfig, SEED_SECTION_CONFIG);
+        return SEED_SECTION_CONFIG;
+      }
       try {
-        return await actor.getSectionConfig();
+        const cfg = await actor.getSectionConfig();
+        lsSet(LS.sectionConfig, cfg);
+        return cfg;
       } catch {
+        lsSet(LS.sectionConfig, SEED_SECTION_CONFIG);
         return SEED_SECTION_CONFIG;
       }
     },
@@ -570,10 +718,11 @@ export function useSectionConfig() {
 }
 
 export function useUpdateSectionConfig() {
-  const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (config: SectionConfig) => actor!.updateSectionConfig(config),
+    mutationFn: async (config: SectionConfig) => {
+      lsSet(LS.sectionConfig, config);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sectionConfig"] }),
   });
 }

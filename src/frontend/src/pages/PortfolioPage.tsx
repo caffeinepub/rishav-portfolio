@@ -1,4 +1,13 @@
-import { ArrowDown, ChevronRight, Eye, Play, Star } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronRight,
+  Eye,
+  Menu,
+  Play,
+  Star,
+  X,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -695,7 +704,7 @@ function ServicesSection({ services }: { services: Service[] }) {
           </h2>
         </motion.div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {services.map((svc, i) => (
             <motion.div
               key={svc.id}
@@ -1320,10 +1329,50 @@ function LongFormSection({
   );
 }
 
+// ─── SCROLL TO TOP ─────────────────────────────────────────────────────────────
+
+function ScrollToTopButton() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setVisible(window.scrollY > 400);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <motion.button
+      type="button"
+      aria-label="Scroll to top"
+      className="scroll-top-btn"
+      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+      initial={{ opacity: 0, scale: 0 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0 }}
+      whileHover={{ scale: 1.1 }}
+      whileTap={{ scale: 0.9 }}
+    >
+      <ArrowUp size={16} />
+    </motion.button>
+  );
+}
+
 // ─── NAV ─────────────────────────────────────────────────────────────────────
+
+const NAV_LINKS = [
+  { label: "Work", id: "shortform-section" },
+  { label: "Long Form", id: "longform-section" },
+  { label: "Services", id: "services-section" },
+  { label: "About", id: "about-section" },
+  { label: "Contact", id: "contact-section" },
+];
 
 function Navbar({ siteContent }: { siteContent: SiteContent }) {
   const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [activeId, setActiveId] = useState<string>("");
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 60);
@@ -1331,61 +1380,142 @@ function Navbar({ siteContent }: { siteContent: SiteContent }) {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Active section tracking via IntersectionObserver
+  useEffect(() => {
+    const sectionIds = NAV_LINKS.map((l) => l.id);
+    const observers: IntersectionObserver[] = [];
+
+    for (const id of sectionIds) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      const obs = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) setActiveId(id);
+        },
+        { rootMargin: "-40% 0px -55% 0px" },
+      );
+      obs.observe(el);
+      observers.push(obs);
+    }
+
+    return () => {
+      for (const obs of observers) obs.disconnect();
+    };
+  }, []);
+
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+    setMobileOpen(false);
   };
 
   return (
-    <nav
-      className="fixed top-0 left-0 right-0 z-30 transition-all duration-300"
-      style={{
-        background: scrolled ? "oklch(0.07 0.003 240 / 0.9)" : "transparent",
-        backdropFilter: scrolled ? "blur(20px)" : "none",
-        borderBottom: scrolled
-          ? "1px solid oklch(0.82 0.22 193 / 0.1)"
-          : "none",
-      }}
-    >
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        <span
-          className="text-lg font-bold tracking-[0.2em] neon-text"
-          style={{ fontFamily: '"Bricolage Grotesque", sans-serif' }}
-        >
-          {siteContent.heroName}
-        </span>
-
-        <div className="hidden md:flex items-center gap-6">
-          {[
-            { label: "Work", id: "shortform-section" },
-            { label: "Long Form", id: "longform-section" },
-            { label: "Services", id: "services-section" },
-            { label: "About", id: "about-section" },
-            { label: "Contact", id: "contact-section" },
-          ].map((item) => (
-            <button
-              type="button"
-              key={item.label}
-              onClick={() => scrollTo(item.id)}
-              className="text-sm transition-colors"
-              style={{ color: "oklch(0.55 0.02 240)" }}
-            >
-              {item.label}
-            </button>
-          ))}
-          <a
-            href="/admin"
-            className="text-xs px-3 py-1.5 rounded-lg"
-            style={{
-              background: "oklch(0.82 0.22 193 / 0.1)",
-              border: "1px solid oklch(0.82 0.22 193 / 0.2)",
-              color: "var(--neon)",
-            }}
+    <>
+      <nav
+        data-ocid="nav.section"
+        className="fixed top-0 left-0 right-0 z-30 transition-all duration-300"
+        style={{
+          background: scrolled ? "oklch(0.07 0.003 240 / 0.9)" : "transparent",
+          backdropFilter: scrolled ? "blur(20px)" : "none",
+          borderBottom: scrolled
+            ? "1px solid oklch(0.82 0.22 193 / 0.1)"
+            : "none",
+        }}
+      >
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <span
+            className="text-lg font-bold tracking-[0.2em] neon-text"
+            style={{ fontFamily: '"Bricolage Grotesque", sans-serif' }}
           >
-            Admin
-          </a>
+            {siteContent.heroName}
+          </span>
+
+          {/* Desktop nav */}
+          <div className="hidden md:flex items-center gap-6">
+            {NAV_LINKS.map((item) => (
+              <button
+                type="button"
+                key={item.label}
+                data-ocid={`nav.${item.id}_link`}
+                onClick={() => scrollTo(item.id)}
+                className="text-sm transition-all duration-200 relative"
+                style={{
+                  color:
+                    activeId === item.id
+                      ? "var(--neon)"
+                      : "oklch(0.55 0.02 240)",
+                  textShadow:
+                    activeId === item.id
+                      ? "0 0 12px oklch(0.82 0.22 193 / 0.5)"
+                      : "none",
+                }}
+              >
+                {item.label}
+                {activeId === item.id && (
+                  <span
+                    className="absolute -bottom-1 left-0 right-0 h-px"
+                    style={{ background: "var(--neon)" }}
+                  />
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Mobile hamburger */}
+          <button
+            type="button"
+            data-ocid="nav.mobile_menu_button"
+            className="md:hidden w-9 h-9 flex items-center justify-center rounded-lg transition-colors"
+            style={{ color: "oklch(0.65 0.02 240)" }}
+            onClick={() => setMobileOpen((v) => !v)}
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          >
+            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
-      </div>
-    </nav>
+      </nav>
+
+      {/* Mobile nav panel */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            data-ocid="nav.mobile_panel"
+            className="mobile-nav-panel md:hidden"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="flex flex-col gap-1">
+              {NAV_LINKS.map((item) => (
+                <button
+                  type="button"
+                  key={item.label}
+                  data-ocid={`nav.mobile_${item.id}_link`}
+                  onClick={() => scrollTo(item.id)}
+                  className="flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-left"
+                  style={{
+                    color:
+                      activeId === item.id
+                        ? "var(--neon)"
+                        : "oklch(0.65 0.02 240)",
+                    background:
+                      activeId === item.id
+                        ? "oklch(0.82 0.22 193 / 0.08)"
+                        : "transparent",
+                    borderLeft:
+                      activeId === item.id
+                        ? "2px solid var(--neon)"
+                        : "2px solid transparent",
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -1470,7 +1600,10 @@ export function PortfolioPage() {
   const whatsappUrl = `https://wa.me/${content.whatsappNumber}?text=${encodeURIComponent(content.whatsappMessage || "Hi!")}`;
 
   return (
-    <div className="min-h-screen" style={{ background: "oklch(0.06 0 0)" }}>
+    <div
+      className="min-h-screen page-fade-in"
+      style={{ background: "oklch(0.06 0 0)" }}
+    >
       <Navbar siteContent={content} />
 
       <HeroSection siteContent={content} />
@@ -1490,10 +1623,12 @@ export function PortfolioPage() {
       )}
 
       {sections.featuredEnabled && featuredVideos.length > 0 && (
-        <FeaturedSlider
-          videos={featuredVideos}
-          onVideoClick={setSelectedVideo}
-        />
+        <div id="featured-section">
+          <FeaturedSlider
+            videos={featuredVideos}
+            onVideoClick={setSelectedVideo}
+          />
+        </div>
       )}
 
       {sections.servicesEnabled && (
@@ -1509,7 +1644,9 @@ export function PortfolioPage() {
       )}
 
       {sections.testimonialsEnabled && testimonials.length > 0 && (
-        <TestimonialsSection testimonials={testimonials} />
+        <div id="testimonials-section">
+          <TestimonialsSection testimonials={testimonials} />
+        </div>
       )}
 
       {sections.contactEnabled && (
@@ -1522,6 +1659,11 @@ export function PortfolioPage() {
 
       {/* Floating action buttons */}
       <FloatingButtons whatsappUrl={whatsappUrl} />
+
+      {/* Scroll to top */}
+      <AnimatePresence>
+        <ScrollToTopButton />
+      </AnimatePresence>
 
       {/* Modals */}
       <VideoModal
