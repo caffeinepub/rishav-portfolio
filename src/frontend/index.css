@@ -478,17 +478,47 @@ body {
 }
 
 /* ============================================================
-   VIDEO SYSTEM — responsive container + zoom fix
+   VIDEO SYSTEM — video-wrapper + responsive container + zoom fix
    ============================================================ */
 
 /*
-  Responsive 16:9 video container (for iframes and video tags).
-  Use this wrapper instead of fixed height/width on the video itself.
+  .video-wrapper — universal YouTube / iframe embed container.
+  This is the CORRECT structure to prevent black screen and layout break:
+
+    <div class="video-wrapper">
+      <iframe src="https://www.youtube.com/embed/VIDEO_ID" ...></iframe>
+    </div>
+
+  Rules:
+  - aspect-ratio: 16/9 fills width and derives height automatically.
+  - position: relative — required for the absolute-positioned iframe inside.
+  - NO overflow: hidden — clips YouTube controls and causes black screen on iOS.
+  - NO transform: scale() — causes zoom-on-click issue.
+  - NO position: fixed — breaks layout.
+  - NO height: 100vh — stretches outside viewport.
+*/
+.video-wrapper {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  position: relative;
+}
+
+.video-wrapper iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 18px;
+  display: block;
+  background: transparent;
+}
+
+/*
+  Responsive 16:9 video container (legacy alias, same behaviour).
 */
 .video-container {
   position: relative;
   width: 100%;
-  padding-top: 56.25%; /* 16:9 aspect ratio */
+  aspect-ratio: 16 / 9;
 }
 
 .video-container iframe,
@@ -511,10 +541,6 @@ body {
 video {
   max-width: 100%;
   height: auto;
-  /* GPU compositing — forces video onto its own layer.
-     Fixes "audio plays but video is black" (software rendering fallback). */
-  transform: translateZ(0);
-  will-change: transform;
 }
 
 /* Inside the modal, video fills the container exactly */
@@ -525,15 +551,12 @@ video {
 }
 
 /*
-  YouTube iframe GPU compositing fix.
-  Black screen on YouTube iframes is caused by the browser falling back
-  to software rendering. Forcing GPU compositing via transform: translateZ(0)
-  fixes this consistently across Chrome, Firefox, and Safari.
+  YouTube iframe — transparent background prevents the black flash while loading.
+  Do NOT add overflow:hidden or transform:scale() to any ancestor.
 */
 iframe[src*="youtube.com/embed"] {
   background: transparent;
-  transform: translateZ(0);
-  will-change: transform;
+  display: block;
 }
 
 /*

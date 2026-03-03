@@ -2,67 +2,47 @@
 
 ## Current State
 
-Full-stack React + Motoko portfolio for a video editor named Rishav. The frontend uses Framer Motion, Tailwind CSS, TanStack Router, and localStorage-based data persistence (bypassing the Motoko backend auth). Admin panel at `/admin` with password `ffrishav9395889127`. Videos open in a fullscreen cinematic modal using YouTube iframes and native video elements.
-
-Known issues:
-- `index.html` has an empty `<title>` tag and no meta description, OG tags, or favicon link
-- Navbar nav links reference section IDs (`longform-section`, `services-section`, `about-section`, `contact-section`) that are only applied to wrapper `<div>` elements — some sections (e.g. `ShortFormSection`) have `id="shortform-section"` on the `<section>` but the inner `LongFormSection`, `ServicesSection`, `AboutSection`, `ContactSection` have no IDs on their actual DOM elements
-- No scroll-to-top button
-- No active navbar highlight on scroll
-- No page load animation / loading screen
-- Admin panel navbar link is visible in the public-facing navbar (security exposure)
-- `no-scrollbar` Tailwind utility used in featured slider but not defined anywhere
-- Mobile hamburger menu is missing — navbar has no mobile nav at all
-- `Services` section grid can overflow on very small screens
-- Video modal: YouTube Shorts embeds need `youtube.com/shorts/` pattern handled (already in `extractYouTubeId` but the modal's `getYouTubeId` only handles 3 patterns — Shorts URL missing)
-- Seed videos all use the same `dQw4w9WgXcQ` placeholder URL with no thumbnails — results in empty thumbnail placeholders with no fallback image
-- `index.css` references `/assets/fonts/MonaSans.woff2`, `/assets/fonts/BricolageGrotesque.woff2`, `/assets/fonts/Sora.woff2` — these don't exist in `public/assets/fonts/`, so fonts fall back to system fonts silently
-- Missing `no-scrollbar` CSS class used on featured slider
-- `overflow-x: hidden` on `body` but some flex/grid containers can still cause horizontal scroll on mobile
-- No `<meta name="theme-color">` for mobile browsers
-- No Open Graph / Twitter Card meta tags
-- No `lang` attribute value on `<html>` (it has `lang="en"` — OK)
-- `ServiceCard` grid uses `grid-cols-2 md:grid-cols-3` — on 320px screens 2 columns can cut off content
-- Scroll progress bar exists but has no `no-js` fallback
-- Contact section and About section have no `id` attributes for navbar scroll targeting
+Full-stack portfolio site on the Internet Computer (Motoko backend + React frontend).
+- Backend has: video CRUD, categories, services, testimonials, site content, theme settings, section config, media library, blob storage, authorization
+- Frontend has: dark cinematic glassmorphism UI, hero (RISHAV name reveal), short/long form video grids, featured slider, services, about, contact/WhatsApp, admin panel with password login (`ffrishav9395889127`)
+- Video system previously supported YouTube URLs, Instagram links, and file uploads
+- Admin panel had YouTube/Instagram URL fields and auto-thumbnail from YouTube
 
 ## Requested Changes (Diff)
 
 ### Add
-- Proper `<title>`, `<meta description>`, OG tags, and favicon `<link>` in `index.html`
-- `<meta name="theme-color">` tag
-- Scroll-to-top button (appears after scrolling 400px, smooth scroll back to top)
-- Active navbar link highlight based on current scroll position (IntersectionObserver)
-- Mobile hamburger menu in the Navbar with a slide-down panel showing all nav links
-- `no-scrollbar` CSS utility class in `index.css`
-- Missing section `id` attributes: `longform-section`, `services-section`, `about-section`, `contact-section`, `featured-section`, `testimonials-section`
-- Admin link removed from the public-facing navbar (hidden — only accessible via 5s hold on "View Portfolio")
-- Google Fonts preconnect and font import fallback so fonts load even without local woff2 files
-- Page load skeleton / fade-in animation on initial mount
-- YouTube Shorts URL pattern fix in `VideoModal.tsx` `getYouTubeId` function
+- Direct video file upload ONLY via drag-and-drop zone in admin (mp4/mov/webm, max 500MB)
+- Upload progress bar during file transfer to blob storage
+- Client-side auto-thumbnail extraction at 50% of video timeline using canvas
+- Client-side auto-duration detection using HTMLVideoElement.duration
+- Duration badge (mm:ss) on every video card (bottom-right corner)
+- Duration stored per video in backend
+- Admin video cards show: video preview, thumbnail preview, duration badge, Regenerate Thumbnail + Replace Video + Delete buttons
+- Admin dashboard shows total video count
 
 ### Modify
-- `index.html`: populate `<title>`, add meta tags, OG tags, favicon, theme-color
-- `Navbar`: add mobile hamburger + slide-down menu, add active section highlighting, remove Admin link
-- `PortfolioPage`: add section IDs to all sections, add ScrollToTop button component, add page load fade-in
-- `index.css`: add `.no-scrollbar` utility, fix `overflow-x` containment
-- `VideoModal.tsx`: add YouTube Shorts URL pattern to `getYouTubeId`
-- `ServicesSection`: make grid `grid-cols-1 sm:grid-cols-2 md:grid-cols-3` for better small-screen layout
+- VideoForm: remove platform selector, YouTube URL field, Instagram URL field; replace with file upload dropzone
+- VideoEntry backend type: keep title, videoUrl, thumbnailUrl, duration, views, uploadDate, category, featured, videoType, order; remove platform field entirely
+- Video modal: plays only direct video files (no iframe embeds), uses React Player or native `<video>` tag
+- Short-form cards: 2 cols mobile, 4 cols desktop, 9:16 ratio, thumbnail + duration badge
+- Long-form cards: 1 col mobile, 3 cols desktop, 16:9 ratio, thumbnail + duration badge
+- Admin section config to still toggle all sections
 
 ### Remove
-- Admin panel link from public navbar
+- Platform field (`#upload | #youtube | #instagram`) from VideoEntry
+- YouTube URL auto-thumbnail generation
+- Instagram embed/blockquote logic
+- All `extractYouTubeId`, `detectPlatform`, `getInstagramPostId` helpers
+- `instgrm.Embeds.process()` calls and embed.js script injection
+- Any iframe used for video playback; replace with native `<video>` / React Player with direct URL
 
 ## Implementation Plan
 
-1. Update `index.html` with full SEO meta tags, OG tags, favicon link, theme-color
-2. Add `.no-scrollbar` CSS to `index.css`, fix overflow containment
-3. Fix `VideoModal.tsx` `getYouTubeId` to handle YouTube Shorts URLs
-4. Update `PortfolioPage.tsx`:
-   - Add `id` attributes to all section wrappers (`longform-section`, `services-section`, `about-section`, `contact-section`, etc.)
-   - Remove Admin link from Navbar
-   - Add active section tracking via IntersectionObserver in Navbar
-   - Add mobile hamburger menu to Navbar
-   - Update Services grid to `grid-cols-1 sm:grid-cols-2 md:grid-cols-3`
-   - Add ScrollToTop button component
-   - Add page-load fade-in wrapper
-5. Validate build passes with zero TypeScript errors
+1. Update Motoko backend: remove platform variant from VideoEntry, keep all other fields
+2. Update frontend VideoForm component: replace URL fields with file dropzone (drag-and-drop), show progress, auto-extract thumbnail+duration client-side via canvas
+3. Update VideoModal: remove iframe/YouTube/Instagram branches, use native `<video>` tag with controls
+4. Update video card components: add duration badge overlay bottom-right
+5. Update admin video list cards: show thumbnail preview, duration, Regenerate Thumbnail and Replace Video buttons
+6. Update admin dashboard: add total video count stat
+7. Clean up all unused YouTube/Instagram code paths
+8. Validate typecheck and build pass cleanly

@@ -14,6 +14,8 @@ import {
   Phone,
   Play,
   Plus,
+  RefreshCw,
+  Replace,
   Save,
   Sparkles,
   Star,
@@ -35,6 +37,8 @@ import type {
   VideoEntry,
 } from "../backend";
 import { GlowIntensity, VideoPlatform, VideoType } from "../backend";
+import { VideoUploader } from "../components/VideoUploader";
+import type { VideoUploaderResult } from "../components/VideoUploader";
 import {
   useAddMediaFile,
   useAiProxy,
@@ -411,35 +415,18 @@ function HeroSection() {
   );
 }
 
+// ─── Duration helper ──────────────────────────────────────────────────────────
+
+function formatDuration(seconds: number): string {
+  const s = Math.round(seconds);
+  const mm = Math.floor(s / 60)
+    .toString()
+    .padStart(2, "0");
+  const ss = (s % 60).toString().padStart(2, "0");
+  return `${mm}:${ss}`;
+}
+
 // ─── VIDEO FORM ───────────────────────────────────────────────────────────────
-
-// Extract YouTube video ID from any YouTube URL (watch, shorts, youtu.be)
-function extractYouTubeId(url: string): string | null {
-  if (!url) return null;
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
-    /[?&]v=([a-zA-Z0-9_-]{11})/,
-  ];
-  for (const p of patterns) {
-    const m = url.match(p);
-    if (m) return m[1];
-  }
-  return null;
-}
-
-function getYouTubeThumbnail(url: string): string {
-  const id = extractYouTubeId(url);
-  if (!id) return "";
-  return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
-}
-
-function detectPlatform(url: string): VideoPlatform {
-  if (!url) return VideoPlatform.youtube;
-  if (url.includes("instagram.com")) return VideoPlatform.instagram;
-  if (url.includes("youtube.com") || url.includes("youtu.be"))
-    return VideoPlatform.youtube;
-  return VideoPlatform.upload;
-}
 
 function VideoForm({
   initial,
@@ -461,7 +448,7 @@ function VideoForm({
     title: initial?.title ?? "",
     videoUrl: initial?.videoUrl ?? "",
     thumbnailUrl: initial?.thumbnailUrl ?? "",
-    platform: initial?.platform ?? VideoPlatform.youtube,
+    platform: VideoPlatform.upload,
     category: initial?.category ?? categories[0]?.slug ?? "",
     views: initial?.views ?? (0 as unknown as bigint),
     duration: initial?.duration ?? (0 as unknown as bigint),
@@ -474,16 +461,16 @@ function VideoForm({
   const set = (k: keyof VideoEntry, v: unknown) =>
     setForm((p) => ({ ...p, [k]: v }));
 
-  // When video URL changes: auto-detect platform and auto-generate thumbnail
-  const handleVideoUrlChange = (url: string) => {
-    const platform = detectPlatform(url);
-    const thumbnail = getYouTubeThumbnail(url);
+  const durationSec = Number(form.duration);
+  const hasVideo = !!form.videoUrl;
+
+  const handleUploadComplete = (result: VideoUploaderResult) => {
     setForm((p) => ({
       ...p,
-      videoUrl: url,
-      platform,
-      // Only auto-set thumbnail if it's empty or was previously auto-generated
-      thumbnailUrl: thumbnail || p.thumbnailUrl,
+      videoUrl: result.videoUrl,
+      thumbnailUrl: result.thumbnailUrl,
+      duration: result.durationSeconds as unknown as bigint,
+      platform: VideoPlatform.upload,
     }));
   };
 
@@ -495,62 +482,111 @@ function VideoForm({
         onChange={(v) => set("title", v)}
         placeholder="Video title"
       />
-      <div className="flex flex-col gap-1.5">
-        <AdminInput
-          label="Video URL (YouTube / upload URL)"
-          value={form.videoUrl}
-          onChange={handleVideoUrlChange}
-          placeholder="https://www.youtube.com/watch?v=..."
+
+      {/* Video Uploader */}
+      <div className="flex flex-col gap-2">
+        <span
+          className="text-xs font-medium"
+          style={{ color: "oklch(0.55 0.02 240)" }}
+        >
+          Video File
+        </span>
+        <VideoUploader
+          videoType={videoType}
+          onUploadComplete={handleUploadComplete}
+          onError={(msg) => toast.error(msg)}
         />
-        {form.platform === VideoPlatform.upload && (
-          <p style={{ color: "oklch(0.55 0.2 25)", fontSize: "0.75rem" }}>
-            Paste a direct .mp4 or .webm URL. The video will play inside the
-            website modal.
-          </p>
-        )}
       </div>
-      {/* Thumbnail preview */}
-      {form.thumbnailUrl && (
-        <div className="flex items-center gap-3">
-          <img
-            src={form.thumbnailUrl}
-            alt="Thumbnail preview"
-            className="w-24 h-14 rounded-lg object-cover"
-            style={{ border: "1px solid oklch(0.2 0.012 240)" }}
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = "none";
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => set("thumbnailUrl", "")}
-            className="text-xs px-2 py-1 rounded"
-            style={{
-              background: "oklch(0.7 0.22 25 / 0.1)",
-              border: "1px solid oklch(0.7 0.22 25 / 0.3)",
-              color: "oklch(0.7 0.18 25)",
-            }}
+
+      {/* Post-upload preview */}
+      {hasVideo && (
+        <div
+          className="rounded-xl p-4 flex flex-col gap-3"
+          style={{
+            background: "oklch(0.07 0.003 240)",
+            border: "1px solid oklch(0.82 0.22 193 / 0.2)",
+          }}
+        >
+          <p
+            className="text-xs font-semibold"
+            style={{ color: "oklch(0.82 0.22 193)" }}
           >
-            Remove
-          </button>
+            Uploaded Successfully
+          </p>
+
+          <div className="flex gap-3 items-start">
+            {/* Video preview */}
+            <div
+              className="flex-shrink-0 rounded-lg overflow-hidden"
+              style={{
+                width: videoType === VideoType.short_ ? "56px" : "96px",
+                height: videoType === VideoType.short_ ? "96px" : "54px",
+                background: "oklch(0.12 0.006 240)",
+                border: "1px solid oklch(0.22 0.012 240)",
+              }}
+            >
+              {form.thumbnailUrl ? (
+                <img
+                  src={form.thumbnailUrl}
+                  alt="Thumbnail"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "oklch(0.4 0.02 240)",
+                  }}
+                >
+                  <Film size={16} />
+                </div>
+              )}
+            </div>
+
+            {/* Meta */}
+            <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+              {/* biome-ignore lint/a11y/useMediaCaption: admin preview player, captions not applicable */}
+              <video
+                src={form.videoUrl}
+                controls
+                preload="none"
+                playsInline
+                poster={form.thumbnailUrl || undefined}
+                style={{
+                  width: "100%",
+                  borderRadius: "8px",
+                  maxHeight: "120px",
+                  background: "oklch(0.08 0.004 240)",
+                }}
+              />
+              {durationSec > 0 && (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    padding: "2px 8px",
+                    borderRadius: "4px",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    background: "oklch(0 0 0 / 0.6)",
+                    border: "1px solid oklch(0.35 0.02 240 / 0.5)",
+                    color: "oklch(0.88 0.01 240)",
+                    width: "fit-content",
+                  }}
+                >
+                  ⏱ {formatDuration(durationSec)}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       )}
-      <AdminInput
-        label="Thumbnail URL (auto-filled from YouTube)"
-        value={form.thumbnailUrl}
-        onChange={(v) => set("thumbnailUrl", v)}
-        placeholder="Auto-generated from YouTube URL, or paste custom"
-      />
-      <AdminSelect
-        label="Platform"
-        value={form.platform}
-        onChange={(v) => set("platform", v as VideoPlatform)}
-        options={[
-          { value: VideoPlatform.youtube, label: "YouTube" },
-          { value: VideoPlatform.upload, label: "Upload" },
-          { value: VideoPlatform.instagram, label: "Instagram" },
-        ]}
-      />
+
       <AdminSelect
         label="Category"
         value={form.category}
@@ -606,8 +642,9 @@ function VideoForm({
       <div className="flex gap-3 pt-2">
         <button
           type="button"
+          data-ocid="video.submit_button"
           onClick={() => onSubmit(form)}
-          disabled={isPending || !form.title || !form.videoUrl}
+          disabled={isPending || !form.title || !hasVideo}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
           style={{
             background: "oklch(0.82 0.22 193 / 0.15)",
@@ -624,6 +661,7 @@ function VideoForm({
         </button>
         <button
           type="button"
+          data-ocid="video.cancel_button"
           onClick={onCancel}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all"
           style={{
@@ -642,6 +680,75 @@ function VideoForm({
 
 // ─── VIDEO MANAGER ────────────────────────────────────────────────────────────
 
+/** Inline panel for replacing a video file or regenerating the thumbnail only */
+function VideoReplacePanel({
+  videoType,
+  mode,
+  onDone,
+  onCancel,
+}: {
+  videoType: VideoType;
+  mode: "replace" | "rethumb";
+  onDone: (updated: Partial<VideoEntry>) => void;
+  onCancel: () => void;
+}) {
+  const handleUploadComplete = (result: VideoUploaderResult) => {
+    if (mode === "rethumb") {
+      // Only update thumbnail (and duration from the same video re-process)
+      onDone({
+        thumbnailUrl: result.thumbnailUrl,
+        duration: result.durationSeconds as unknown as bigint,
+      });
+    } else {
+      // Full replacement
+      onDone({
+        videoUrl: result.videoUrl,
+        thumbnailUrl: result.thumbnailUrl,
+        duration: result.durationSeconds as unknown as bigint,
+      });
+    }
+  };
+
+  return (
+    <div
+      className="mt-3 rounded-xl p-4 flex flex-col gap-3"
+      style={{
+        background: "oklch(0.07 0.003 240)",
+        border: "1px solid oklch(0.82 0.22 193 / 0.15)",
+      }}
+    >
+      <div className="flex items-center justify-between">
+        <p
+          className="text-xs font-semibold"
+          style={{ color: "oklch(0.82 0.22 193)" }}
+        >
+          {mode === "rethumb"
+            ? "Upload video to regenerate thumbnail"
+            : "Upload new video file"}
+        </p>
+        <button
+          type="button"
+          onClick={onCancel}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            color: "oklch(0.5 0.02 240)",
+            padding: 0,
+          }}
+        >
+          <X size={14} />
+        </button>
+      </div>
+      <VideoUploader
+        videoType={videoType}
+        onUploadComplete={handleUploadComplete}
+        onError={(msg) => toast.error(msg)}
+      />
+    </div>
+  );
+}
+
 function VideoManager({ videoType }: { videoType: VideoType }) {
   const isShort = videoType === VideoType.short_;
   const { data: videos = [] } = useAllVideos();
@@ -652,10 +759,34 @@ function VideoManager({ videoType }: { videoType: VideoType }) {
 
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Panel mode per video: "replace" | "rethumb" | null
+  const [panelState, setPanelState] = useState<{
+    id: string;
+    mode: "replace" | "rethumb";
+  } | null>(null);
 
   const filtered = videos.filter((v) => v.videoType === videoType);
 
   const sectionId = isShort ? "admin_shortform" : "admin_longform";
+
+  const handlePanelDone = (videoId: string, updates: Partial<VideoEntry>) => {
+    const existing = videos.find((v) => v.id === videoId);
+    if (!existing) return;
+    updateVideo(
+      { id: videoId, video: { ...existing, ...updates } },
+      {
+        onSuccess: () => {
+          setPanelState(null);
+          toast.success(
+            panelState?.mode === "rethumb"
+              ? "Thumbnail regenerated!"
+              : "Video replaced!",
+          );
+        },
+        onError: () => toast.error("Failed to update video"),
+      },
+    );
+  };
 
   return (
     <div data-ocid={`${sectionId}.section`}>
@@ -756,65 +887,155 @@ function VideoManager({ videoType }: { videoType: VideoType }) {
                     />
                   </div>
                 ) : (
-                  <div className="flex items-center gap-4">
-                    {/* Thumbnail preview */}
-                    <div
-                      className="w-16 h-10 rounded-lg flex-shrink-0"
-                      style={{
-                        background: v.thumbnailUrl
-                          ? `url(${v.thumbnailUrl}) center/cover`
-                          : "oklch(0.15 0.08 200)",
-                        border: "1px solid oklch(0.2 0.012 240)",
-                      }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p
-                        className="text-sm font-semibold truncate"
-                        style={{ color: "oklch(0.88 0.01 240)" }}
-                      >
-                        {v.title}
-                      </p>
-                      <p
-                        className="text-xs mt-0.5"
-                        style={{ color: "oklch(0.48 0.02 240)" }}
-                      >
-                        {v.platform} • {v.category || "uncategorized"} •{" "}
-                        {Number(v.views).toLocaleString()} views
-                      </p>
-                    </div>
-                    <div className="flex gap-2 flex-shrink-0">
-                      <button
-                        type="button"
-                        data-ocid={`${sectionId}.edit_button.${i + 1}`}
-                        onClick={() => setEditingId(v.id)}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                  <div>
+                    <div className="flex items-center gap-4">
+                      {/* Thumbnail preview */}
+                      <div
+                        className="flex-shrink-0 rounded-lg overflow-hidden"
                         style={{
-                          color: "oklch(0.6 0.02 240)",
-                          background: "oklch(0.14 0.008 240)",
+                          width: isShort ? "40px" : "64px",
+                          height: isShort ? "64px" : "40px",
+                          background: v.thumbnailUrl
+                            ? `url(${v.thumbnailUrl}) center/cover`
+                            : "oklch(0.15 0.08 200)",
+                          border: "1px solid oklch(0.2 0.012 240)",
                         }}
-                      >
-                        <Edit3 size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        data-ocid={`${sectionId}.delete_button.${i + 1}`}
-                        onClick={() => {
-                          if (confirm(`Delete "${v.title}"?`)) {
-                            deleteVideo(v.id, {
-                              onSuccess: () => toast.success("Video deleted"),
-                              onError: () => toast.error("Failed to delete"),
-                            });
-                          }
-                        }}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-                        style={{
-                          color: "oklch(0.7 0.18 25)",
-                          background: "oklch(0.7 0.22 25 / 0.1)",
-                        }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className="text-sm font-semibold truncate"
+                          style={{ color: "oklch(0.88 0.01 240)" }}
+                        >
+                          {v.title}
+                        </p>
+                        <p
+                          className="text-xs mt-0.5"
+                          style={{ color: "oklch(0.48 0.02 240)" }}
+                        >
+                          {v.category || "uncategorized"} •{" "}
+                          {Number(v.views).toLocaleString()} views
+                          {Number(v.duration) > 0 && (
+                            <span
+                              style={{
+                                marginLeft: "6px",
+                                color: "oklch(0.65 0.02 240)",
+                              }}
+                            >
+                              · {formatDuration(Number(v.duration))}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex gap-1.5 flex-shrink-0">
+                        {/* Regenerate Thumbnail */}
+                        <button
+                          type="button"
+                          data-ocid={`${sectionId}.rethumb_button.${i + 1}`}
+                          title="Regenerate Thumbnail"
+                          onClick={() => {
+                            setPanelState(
+                              panelState?.id === v.id &&
+                                panelState.mode === "rethumb"
+                                ? null
+                                : { id: v.id, mode: "rethumb" },
+                            );
+                            setEditingId(null);
+                          }}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                          style={{
+                            color:
+                              panelState?.id === v.id &&
+                              panelState.mode === "rethumb"
+                                ? "oklch(0.82 0.22 193)"
+                                : "oklch(0.6 0.02 240)",
+                            background:
+                              panelState?.id === v.id &&
+                              panelState.mode === "rethumb"
+                                ? "oklch(0.82 0.22 193 / 0.1)"
+                                : "oklch(0.14 0.008 240)",
+                          }}
+                        >
+                          <RefreshCw size={13} />
+                        </button>
+                        {/* Replace Video */}
+                        <button
+                          type="button"
+                          data-ocid={`${sectionId}.replace_button.${i + 1}`}
+                          title="Replace Video File"
+                          onClick={() => {
+                            setPanelState(
+                              panelState?.id === v.id &&
+                                panelState.mode === "replace"
+                                ? null
+                                : { id: v.id, mode: "replace" },
+                            );
+                            setEditingId(null);
+                          }}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                          style={{
+                            color:
+                              panelState?.id === v.id &&
+                              panelState.mode === "replace"
+                                ? "oklch(0.82 0.22 193)"
+                                : "oklch(0.6 0.02 240)",
+                            background:
+                              panelState?.id === v.id &&
+                              panelState.mode === "replace"
+                                ? "oklch(0.82 0.22 193 / 0.1)"
+                                : "oklch(0.14 0.008 240)",
+                          }}
+                        >
+                          <Replace size={13} />
+                        </button>
+                        {/* Edit metadata */}
+                        <button
+                          type="button"
+                          data-ocid={`${sectionId}.edit_button.${i + 1}`}
+                          title="Edit metadata"
+                          onClick={() => {
+                            setEditingId(v.id);
+                            setPanelState(null);
+                          }}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                          style={{
+                            color: "oklch(0.6 0.02 240)",
+                            background: "oklch(0.14 0.008 240)",
+                          }}
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                        {/* Delete */}
+                        <button
+                          type="button"
+                          data-ocid={`${sectionId}.delete_button.${i + 1}`}
+                          onClick={() => {
+                            if (confirm(`Delete "${v.title}"?`)) {
+                              deleteVideo(v.id, {
+                                onSuccess: () => toast.success("Video deleted"),
+                                onError: () => toast.error("Failed to delete"),
+                              });
+                            }
+                          }}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                          style={{
+                            color: "oklch(0.7 0.18 25)",
+                            background: "oklch(0.7 0.22 25 / 0.1)",
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
+
+                    {/* Inline replace/rethumb panel */}
+                    {panelState?.id === v.id && (
+                      <VideoReplacePanel
+                        videoType={videoType}
+                        mode={panelState.mode}
+                        onDone={(updates) => handlePanelDone(v.id, updates)}
+                        onCancel={() => setPanelState(null)}
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -2607,6 +2828,76 @@ function GlobalControl() {
   );
 }
 
+// ─── STATS BAR ────────────────────────────────────────────────────────────────
+
+function AdminStatsBar() {
+  const { data: videos = [] } = useAllVideos();
+
+  const totalVideos = videos.length;
+  const shortFormCount = videos.filter(
+    (v) => v.videoType === VideoType.short_,
+  ).length;
+  const longFormCount = videos.filter(
+    (v) => v.videoType === VideoType.long_,
+  ).length;
+
+  const stats = [
+    {
+      label: "Total Videos",
+      value: totalVideos,
+      icon: <Film size={18} />,
+      color: "oklch(0.82 0.22 193)",
+    },
+    {
+      label: "Short Form",
+      value: shortFormCount,
+      icon: <Play size={18} />,
+      color: "oklch(0.75 0.16 280)",
+    },
+    {
+      label: "Long Form",
+      value: longFormCount,
+      icon: <Film size={18} />,
+      color: "oklch(0.72 0.2 145)",
+    },
+  ];
+
+  return (
+    <div data-ocid="admin_stats.panel" className="grid grid-cols-3 gap-3 mb-8">
+      {stats.map((stat) => (
+        <div
+          key={stat.label}
+          className="rounded-xl p-4 flex flex-col gap-2"
+          style={{
+            background: "oklch(0.1 0.005 240)",
+            border: "1px solid oklch(0.2 0.012 240)",
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <span style={{ color: stat.color }}>{stat.icon}</span>
+            <span
+              className="text-xs font-medium"
+              style={{ color: "oklch(0.5 0.02 240)" }}
+            >
+              {stat.label}
+            </span>
+          </div>
+          <p
+            className="text-2xl font-bold"
+            style={{
+              color: stat.color,
+              fontFamily: '"Bricolage Grotesque", sans-serif',
+              filter: `drop-shadow(0 0 8px ${stat.color}55)`,
+            }}
+          >
+            {stat.value}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── ADMIN DASHBOARD ──────────────────────────────────────────────────────────
 
 export function AdminDashboardPage() {
@@ -2785,7 +3076,10 @@ export function AdminDashboardPage() {
         </div>
 
         {/* Section content */}
-        <div className="p-6 max-w-4xl">
+        <div className="p-4 sm:p-6 max-w-4xl">
+          {/* Stats bar — always visible */}
+          <AdminStatsBar />
+
           <AnimatePresence mode="wait">
             <motion.div
               key={activeSection}

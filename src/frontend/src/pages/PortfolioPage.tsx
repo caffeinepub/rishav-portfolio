@@ -68,25 +68,19 @@ const GRADIENT_PLACEHOLDERS = [
   "linear-gradient(135deg, oklch(0.2 0.1 60), oklch(0.15 0.08 20))",
 ];
 
-/** Extract YouTube ID from any YouTube URL format */
-function getYouTubeId(url: string): string | null {
-  const patterns = [
-    /(?:youtube\.com\/(?:watch\?v=|shorts\/|live\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
-    /[?&]v=([a-zA-Z0-9_-]{11})/,
-  ];
-  for (const p of patterns) {
-    const m = url.match(p);
-    if (m) return m[1];
-  }
-  return null;
+/** Return the manual thumbnail if available, otherwise empty string */
+function getAutoThumbnail(_videoUrl: string, manualThumb: string): string {
+  if (manualThumb?.trim()) return manualThumb;
+  return "";
 }
 
-/** Auto-generate thumbnail URL from YouTube video URL */
-function getAutoThumbnail(videoUrl: string, manualThumb: string): string {
-  if (manualThumb?.trim()) return manualThumb;
-  const ytId = getYouTubeId(videoUrl);
-  if (ytId) return `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
-  return "";
+function formatDuration(seconds: number): string {
+  const s = Math.round(seconds);
+  const mm = Math.floor(s / 60)
+    .toString()
+    .padStart(2, "0");
+  const ss = (s % 60).toString().padStart(2, "0");
+  return `${mm}:${ss}`;
 }
 
 function getThumbnailStyle(url: string, index: number): React.CSSProperties {
@@ -483,6 +477,24 @@ function ShortVideoCard({
           </div>
         </div>
 
+        {/* Duration badge — bottom-right, overlapping thumbnail */}
+        {Number(video.duration) > 0 && (
+          <div
+            className="absolute bottom-14 right-2 z-10"
+            style={{
+              padding: "2px 6px",
+              borderRadius: "4px",
+              fontSize: "10px",
+              fontWeight: 700,
+              background: "oklch(0 0 0 / 0.75)",
+              color: "oklch(0.95 0.01 240)",
+              letterSpacing: "0.02em",
+            }}
+          >
+            {formatDuration(Number(video.duration))}
+          </div>
+        )}
+
         {/* Bottom overlay */}
         <div className="absolute bottom-0 left-0 right-0 p-3 gradient-overlay-bottom">
           <p
@@ -595,6 +607,24 @@ function LongVideoCard({
         </div>
 
         <div className="absolute bottom-0 left-0 right-0 h-1/2 gradient-overlay-bottom" />
+
+        {/* Duration badge — bottom-right of thumbnail */}
+        {Number(video.duration) > 0 && (
+          <div
+            className="absolute bottom-2 right-2 z-10"
+            style={{
+              padding: "2px 6px",
+              borderRadius: "4px",
+              fontSize: "10px",
+              fontWeight: 700,
+              background: "oklch(0 0 0 / 0.75)",
+              color: "oklch(0.95 0.01 240)",
+              letterSpacing: "0.02em",
+            }}
+          >
+            {formatDuration(Number(video.duration))}
+          </div>
+        )}
       </div>
 
       {/* Info */}
